@@ -1,0 +1,32 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>教材一覧</title><style>body{font:15px/1.7 "Hiragino Kaku Gothic ProN","Yu Gothic UI",sans-serif;background:#f4f4f5;color:#222;margin:0;padding:28px 16px}.wrap{max-width:640px;margin:0 auto}h1{font-size:19px}input{font:inherit;padding:9px 12px;border:1px solid #bbb;border-radius:8px;width:220px}button{font:inherit;padding:9px 16px;border:1px solid #0b7285;border-radius:8px;background:#0b7285;color:#fff;cursor:pointer}.it{background:#fff;border:1px solid #ddd;border-radius:10px;padding:14px 16px;margin-top:10px;display:flex;gap:10px;align-items:center}.it b{flex:1;min-width:0}.it small{color:#777}.it a{color:#0b7285;text-decoration:none;white-space:nowrap}#msg{color:#c00;margin-top:10px}#list{margin-top:14px}</style><div class="wrap"><h1>教材一覧</h1><div>合言葉 <input type="password" id="p"> <button id="go">開く</button></div><div id="msg"></div><div id="list"></div></div><script>
+function b64b(b){b=String(b).replace(/\s/g,"");var s=atob(b),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
+async function dec(text,pass){var p=JSON.parse(text);
+ var km=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+ var key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64b(p.salt),iterations:250000,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["decrypt"]);
+ var pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64b(p.iv)},key,b64b(p.data));
+ return JSON.parse(new TextDecoder().decode(pt))}
+async function open(pass){
+ var msg=document.getElementById("msg"),list=document.getElementById("list");
+ msg.textContent="";list.innerHTML="";
+ var res=await fetch("materials.json?t="+Date.now());
+ if(!res.ok){msg.textContent="一覧がまだありません";return}
+ var items;
+ try{items=(await dec(await res.text(),pass)).items||[]}
+ catch(e){msg.textContent="合言葉が違います";localStorage.removeItem("pslib:pass");return}
+ localStorage.setItem("pslib:pass",pass);
+ items.sort(function(a,b){return String(b.updated||"").localeCompare(String(a.updated||""))});
+ if(!items.length){msg.textContent="まだ教材がありません";return}
+ for(var i=0;i<items.length;i++){(function(it){
+  var d=document.createElement("div");d.className="it";
+  d.innerHTML="<b></b><small></small><a>教材を開く</a>　<a download>編集データ</a>";
+  d.children[0].textContent=it.title||it.id;
+  d.children[1].textContent=(it.author?it.author+"　":"")+(it.updated||"");
+  d.children[2].href="./"+it.id+".html";
+  d.children[3].href="./"+it.id+".json";
+  document.getElementById("list").appendChild(d)})(items[i])}
+}
+document.getElementById("go").onclick=function(){open(document.getElementById("p").value)};
+document.getElementById("p").addEventListener("keydown",function(e){if(e.key==="Enter")open(e.target.value)});
+var saved=localStorage.getItem("pslib:pass");
+if(saved){document.getElementById("p").value=saved;open(saved)}
+</script></html>
